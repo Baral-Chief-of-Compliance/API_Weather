@@ -1,24 +1,61 @@
-from flask import Flask, jsonify
-import redis
-from rq import Queue
+from flask import Flask, jsonify, request
+import json, redis, schedule, time, atexit
 from flask_cors import CORS
-from weather_test import get_weather
+from weather_test import get_inf_weather, get_weather_long_lat
+import geo
+from weather_update_in_redis import update_redis
+from apscheduler.schedulers.background import BackgroundScheduler
+
+
+'''REDIS_START'''
+
+r = redis.Redis(host='localhost', port=6379, db=1)
+
+'''REDIS_END'''
+
+scheduler = BackgroundScheduler(daemon=True)
+scheduler.add_job(update_redis, "interval", seconds=60)
+scheduler.start()
+
+atexit.register(lambda: scheduler.shutdown())
 
 app = Flask(__name__)
 app.config.from_object(__name__)
 
-r = redis.Redis()
-q = Queue(connection=r)
-
-
 CORS(app)
 
 
-json_weather = get_weather()
+@app.route('/weather/api/v1.0/place', methods = ['POST'])
+def chek_place():
 
-@app.route('/weather/api/v1.0/Murmansk', methods = ['GET'])
-def get_weather():
-    return jsonify(json_weather)
+    place = {
+        'name' : request.json['name']
+    }
+
+    print(place)
+
+    if r.get(place['name']):
+        return jsonify(json.loads(r.get(place['name'])))
+
+    else:
+
+        long = geo.get_longitude(place['name'])
+        lat = geo.get_latitude(place['name'])
+
+        get_inf_weather(long, lat, place['name'])
+
+        return jsonify(json.loads(r.get(place['name'])))
+
+
+@app.route('/weather/api/v1.0/long_lat', methods = ['POST'])
+def chek_long_lat():
+
+    place = {
+        'long': request.json['long'],
+        'lat': request.json['lat']
+    }
+
+    return jsonify(get_weather_long_lat(place['long'], place['lat']))
 
 
 if __name__ == '__main__':

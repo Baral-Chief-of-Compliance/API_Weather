@@ -1,26 +1,50 @@
-import requests
-import json
+import requests, json, redis, time
+import os
+from dotenv import load_dotenv
 
 
-def get_weather():
+load_dotenv()
 
-    r = requests.get('https://api.weather.yandex.ru/v2/forecast?lat=68.908513&lon=33.083164&extra=true', headers={"X-Yandex-API-Key": "16c0b05c-66b2-4e79-84d3-0f46907dc28a"})
+token = os.getenv('WEATHER_API_YANDEX')
 
-    with open('data.json', 'w', encoding="utf-8") as file:
-        file.write(r.text)
 
-    file.close()
+def get_inf_weather(long, lat, name):
+
+    r = requests.get(f'https://api.weather.yandex.ru/v2/forecast?lat={lat}&lon={long}&extra=true', headers={"X-Yandex-API-Key": token})
+
+    red = redis.Redis(host='localhost', port=6379, db=1)
 
     weather = {}
 
-    with open('data.json', 'r', encoding="utf-8") as file:
-        data_from_yandex = json.loads(file.read())
+    data_from_yandex = r.json()
 
-        for key in data_from_yandex:
-            if (key == "fact"):
-                weather = data_from_yandex[key]
+    for key in data_from_yandex:
+        if (key == "fact"):
+            weather = data_from_yandex[key]
+
+    json_weather = json.dumps(weather)
+
+    red.set(name, json_weather)
+    print(time.strftime("\n\n%A, %d. %B %Y %I:%M:%S %p") + str(": weather date enter to redis"))
+
+
+def get_weather_long_lat(long, lat):
+
+    r = requests.get(f'https://api.weather.yandex.ru/v2/forecast?lat={lat}&lon={long}&extra=true', headers={"X-Yandex-API-Key": token})
+
+    weather = {}
+
+    data_from_yandex = r.json()
+
+    for key in data_from_yandex:
+        if (key == "fact"):
+            weather = data_from_yandex[key]
+
+
+    print('\n\n'+f'information about {long} {lat} get from Yandex_API')
 
     return weather
+
 
 
 
